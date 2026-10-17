@@ -29,6 +29,7 @@ def run_hourly_cycle() -> None:
         logger.info("Hourly monitoring cycle started")
 
         workflows = [
+            ("KPI_REPORT", "Hourly PS/CS/VoLTE Core KPI Report"),
             ("KPI_CHECK", "Hourly Telecom KPI Check"),
             ("ANOMALY_SCAN", "Hourly Telecom Anomaly Scan"),
         ]

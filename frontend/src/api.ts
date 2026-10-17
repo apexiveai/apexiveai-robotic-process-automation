@@ -8,6 +8,26 @@ export type ApiOptions = {
   signal?: AbortSignal;
 };
 
+export type HourlyReportItem = {
+  network_type: "PS" | "CS" | "VoLTE";
+  metric_name: string;
+  unit: string;
+  hour: string;
+  samples: number;
+  average: number;
+  minimum: number;
+  maximum: number;
+  change_percent: number | null;
+  direction: "UP" | "DOWN" | "FLAT" | "NO_BASELINE";
+};
+
+export type HourlyReport = {
+  generated_at: string;
+  window_hours: number;
+  record_count: number;
+  items: HourlyReportItem[];
+};
+
 export async function apiRequest<T>(
   path: string,
   options: ApiOptions = {}
@@ -57,6 +77,41 @@ export function getKpis(token: string, network = "all") {
   if (network !== "all") query.set("network_type", network);
 
   return apiRequest<unknown>(`/api/v1/kpis?${query}`, { token });
+}
+
+export function getHourlyReport(
+  token: string,
+  hours = 24,
+  network?: "PS" | "CS" | "VoLTE"
+) {
+  const query = new URLSearchParams({ hours: String(hours) });
+  if (network) query.set("network_type", network);
+  return apiRequest<HourlyReport>(`/api/v1/reports/hourly?${query}`, { token });
+}
+
+export async function downloadHourlyReport(
+  token: string,
+  hours = 24,
+  network?: "PS" | "CS" | "VoLTE"
+) {
+  const query = new URLSearchParams({ hours: String(hours) });
+  if (network) query.set("network_type", network);
+
+  const response = await fetch(`${API_BASE}/api/v1/reports/hourly.xlsx?${query}`, {
+    headers: {
+      Accept: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      Authorization: `Bearer ${token}`
+    }
+  });
+
+  if (!response.ok) {
+    const message = await response.text().catch(() => "");
+    throw new Error(
+      `HTTP ${response.status}: ${message.slice(0, 300) || response.statusText}`
+    );
+  }
+
+  return response.blob();
 }
 
 export function getThresholds(token: string) {

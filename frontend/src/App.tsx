@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity, AlertTriangle, Bell, Bot, CheckCircle2,
   ChevronRight, CircleHelp, Clock3, Command, Cpu,
-  Database, Gauge, Globe2, LayoutDashboard, LoaderCircle,
-  LockKeyhole, Menu, Network, Play, RadioTower,
-  RefreshCw, RotateCcw, Search, Send, ShieldCheck,
+  Database, Download, FileSpreadsheet, Gauge, Globe2,
+  LayoutDashboard, LoaderCircle, LockKeyhole, Menu, Network,
+  Play, RadioTower, RefreshCw, RotateCcw, Search, Send, ShieldCheck,
   Signal, TerminalSquare, Wifi, X, Zap
 } from "lucide-react";
 import {
@@ -12,15 +12,18 @@ import {
   Tooltip, XAxis, YAxis
 } from "recharts";
 import {
-  createJob, executeJob, getAlerts, getAuditLogs,
+  createJob, downloadHourlyReport, executeJob, getAlerts, getAuditLogs,
+  getHourlyReport,
   getHealth, getJobs, getKpis, getLicense, getThresholds,
-  resolveAlert, retryJob, submitKpi
+  resolveAlert, retryJob, submitKpi, type HourlyReport,
+  type HourlyReportItem
 } from "./api";
 
-type Item = Record<string, any>;
+type Item = Record<string, unknown>;
 type Section =
   | "Overview"
   | "Network KPIs"
+  | "Hourly Reports"
   | "Alerts Center"
   | "Automation Jobs"
   | "Thresholds"
@@ -33,6 +36,7 @@ const navItems: {
 }[] = [
   { label: "Overview", icon: LayoutDashboard },
   { label: "Network KPIs", icon: Signal },
+  { label: "Hourly Reports", icon: FileSpreadsheet },
   { label: "Alerts Center", icon: Bell },
   { label: "Automation Jobs", icon: Bot },
   { label: "Thresholds", icon: Gauge },
@@ -65,9 +69,20 @@ function number(value: unknown, digits = 2) {
     : "—";
 }
 
-function field(item: Item, keys: string[], fallback: unknown = "—") {
+function field(
+  item: Item,
+  keys: string[],
+  fallback: string | number = "—"
+): string | number {
   for (const key of keys) {
-    if (item[key] !== undefined && item[key] !== null) return item[key];
+    const value = item[key];
+    if (
+      typeof value === "string"
+      || typeof value === "number"
+      || typeof value === "boolean"
+    ) {
+      return typeof value === "boolean" ? String(value) : value;
+    }
   }
   return fallback;
 }
@@ -157,6 +172,13 @@ export default function App() {
   const [thresholds, setThresholds] = useState<Item[]>([]);
   const [logs, setLogs] = useState<Item[]>([]);
   const [license, setLicense] = useState<Item | null>(null);
+  const [hourlyReport, setHourlyReport] = useState<HourlyReport | null>(null);
+  const [reportNetwork, setReportNetwork] = useState<"all" | "PS" | "CS" | "VoLTE">("all");
+  const [reportHours, setReportHours] = useState(24);
+  const [reportMetric, setReportMetric] = useState("");
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportDownloading, setReportDownloading] = useState(false);
+  const [reportUpdated, setReportUpdated] = useState<Date | null>(null);
   const [busyId, setBusyId] = useState<string | number | null>(null);
   const [jobName, setJobName] = useState("Scheduled KPI Health Check");
   const [jobType, setJobType] = useState<"KPI_REPORT" | "KPI_CHECK" | "ANOMALY_SCAN">("KPI_CHECK");
@@ -190,7 +212,7 @@ export default function App() {
       const failures: string[] = [];
       const apply = (
         result: PromiseSettledResult<unknown>,
-        setter: (value: any) => void,
+        setter: (value: unknown) => void,
         label: string
       ) => {
         if (result.status === "fulfilled") setter(result.value);
@@ -217,6 +239,38 @@ export default function App() {
     }
   }, [network]);
 
+  const loadHourlyReport = useCallback(async (activeToken: string) => {
+    setReportLoading(true);
+    try {
+      const result = await getHourlyReport(
+        activeToken,
+        reportHours,
+        reportNetwork === "all" ? undefined : reportNetwork
+      );
+      setHourlyReport(result);
+      setReportUpdated(new Date());
+      setHealth("online");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to load hourly report.");
+    } finally {
+      setReportLoading(false);
+    }
+  }, [reportHours, reportNetwork]);
+
+  useEffect(() => {
+    if (!token || section !== "Hourly Reports") return;
+    const initialLoad = window.setTimeout(() => {
+      void loadHourlyReport(token);
+    }, 0);
+    const interval = window.setInterval(() => {
+      void loadHourlyReport(token);
+    }, 60_000);
+    return () => {
+      window.clearTimeout(initialLoad);
+      window.clearInterval(interval);
+    };
+  }, [token, section, loadHourlyReport]);
+
   useEffect(() => {
     let cancelled = false;
     getHealth()
@@ -227,7 +281,10 @@ export default function App() {
 
   useEffect(() => {
     if (!token) return;
-    void loadData(token);
+    const initialLoad = window.setTimeout(() => {
+      void loadData(token);
+    }, 0);
+    return () => window.clearTimeout(initialLoad);
   }, [token, loadData]);
 
   const refresh = () => {
@@ -236,6 +293,7 @@ export default function App() {
       return;
     }
     void loadData(token);
+    if (section === "Hourly Reports") void loadHourlyReport(token);
   };
 
   const connect = (event: React.FormEvent) => {
@@ -280,6 +338,40 @@ export default function App() {
       metric: String(field(item, ["metric_name"], `Metric ${index + 1}`))
     })).filter((item) => Number.isFinite(item.value));
   }, [filteredKpis]);
+
+  const reportMetrics = useMemo(
+    () => [...new Set(hourlyReport?.items.map((item) => item.metric_name) ?? [])].sort(),
+    [hourlyReport]
+  );
+  const selectedReportMetric = reportMetrics.includes(reportMetric)
+    ? reportMetric
+    : reportMetrics[0] ?? "";
+  const reportChartData = useMemo(() => {
+    const data = new Map<string, Item>();
+    for (const item of hourlyReport?.items ?? []) {
+      if (item.metric_name !== selectedReportMetric) continue;
+      const hour = item.hour;
+      const bucket = data.get(hour) ?? { hour };
+      bucket[item.network_type] = item.average;
+      data.set(hour, bucket);
+    }
+    return [...data.values()].sort(
+      (a, b) => new Date(String(a.hour)).getTime() - new Date(String(b.hour)).getTime()
+    );
+  }, [hourlyReport, selectedReportMetric]);
+  const latestByNetwork = useMemo(() => {
+    const latest: Partial<Record<"PS" | "CS" | "VoLTE", HourlyReportItem>> = {};
+    for (const item of hourlyReport?.items ?? []) {
+      const current = latest[item.network_type];
+      if (
+        item.metric_name === selectedReportMetric
+        && (!current || new Date(item.hour).getTime() > new Date(current.hour).getTime())
+      ) {
+        latest[item.network_type] = item;
+      }
+    }
+    return latest;
+  }, [hourlyReport, selectedReportMetric]);
 
   const resolve = async (item: Item) => {
     const id = field(item, ["id", "alert_id"]);
@@ -359,6 +451,34 @@ export default function App() {
       await loadData(token);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not submit KPI.");
+    }
+  };
+
+  const exportHourlyReport = async () => {
+    if (!token) {
+      setError("Connect with an API token before exporting reports.");
+      return;
+    }
+    setReportDownloading(true);
+    try {
+      const blob = await downloadHourlyReport(
+        token,
+        reportHours,
+        reportNetwork === "all" ? undefined : reportNetwork
+      );
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "telecom-hourly-report.xlsx";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setNotice("Excel workbook downloaded with raw data, hourly summary and trend chart.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to download Excel report.");
+    } finally {
+      setReportDownloading(false);
     }
   };
 
@@ -516,6 +636,127 @@ export default function App() {
     </section>
   );
 
+  const renderHourlyReports = () => {
+    const trendColors: Record<"CS" | "PS" | "VoLTE", string> = {
+      CS: "#24e9ff",
+      PS: "#ff3dbf",
+      VoLTE: "#9b7cff"
+    };
+
+    return (
+      <div className="stack">
+        <section className="panel">
+          <div className="panel-heading">
+            <div>
+              <span className="eyebrow">CORE NETWORK PERFORMANCE</span>
+              <h2>Hourly CS / PS / VoLTE Report</h2>
+              <p>Hourly averages, sample counts and traffic direction from ingested KPI records.</p>
+            </div>
+            <button className="primary-button" onClick={() => void exportHourlyReport()} disabled={reportDownloading}>
+              {reportDownloading ? <LoaderCircle size={15} className="spin" /> : <Download size={15} />}
+              Export Excel
+            </button>
+          </div>
+          <div className="report-toolbar">
+            <label>Network
+              <select className="dark-select" value={reportNetwork} onChange={(event) => setReportNetwork(event.target.value as typeof reportNetwork)}>
+                <option value="all">All networks</option>
+                <option value="CS">CS Core</option>
+                <option value="PS">PS Core</option>
+                <option value="VoLTE">VoLTE</option>
+              </select>
+            </label>
+            <label>Period
+              <select className="dark-select" value={reportHours} onChange={(event) => setReportHours(Number(event.target.value))}>
+                <option value={24}>Last 24 hours</option>
+                <option value={72}>Last 72 hours</option>
+                <option value={168}>Last 7 days</option>
+              </select>
+            </label>
+            <label>Metric
+              <select className="dark-select" value={selectedReportMetric} onChange={(event) => setReportMetric(event.target.value)} disabled={!reportMetrics.length}>
+                {reportMetrics.length
+                  ? reportMetrics.map((metric) => <option key={metric} value={metric}>{metric}</option>)
+                  : <option value="">No metrics</option>}
+              </select>
+            </label>
+            <span className="report-refresh-state">
+              {reportLoading ? <LoaderCircle size={13} className="spin" /> : <Clock3 size={13} />}
+              {reportUpdated ? `Updated ${reportUpdated.toLocaleTimeString()}` : "Waiting for report"}
+            </span>
+          </div>
+          <div className="stats-grid report-stats">
+            {([
+              ["CS", "CS CORE", "cyan"],
+              ["PS", "PS CORE", "pink"],
+              ["VoLTE", "VoLTE", "purple"]
+            ] as const).map(([networkType, label, tone]) => {
+              const latest = latestByNetwork[networkType];
+              return (
+                <StatCard
+                  key={networkType}
+                  label={`${label} · ${selectedReportMetric || "NO DATA"}`}
+                  value={latest ? `${number(latest.average)} ${latest.unit}` : "—"}
+                  detail={latest ? `${latest.direction === "NO_BASELINE" ? "No prior hour" : `${latest.change_percent === null ? latest.direction.toLowerCase() : `${number(latest.change_percent)}% ${latest.direction.toLowerCase()}`}`} · ${latest.samples} samples` : "No KPI samples in this period"}
+                  icon={Activity}
+                  tone={tone}
+                />
+              );
+            })}
+          </div>
+          <div className="chart-area report-chart">
+            {reportChartData.length ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={reportChartData} margin={{ top: 12, right: 8, left: -16, bottom: 4 }}>
+                  <CartesianGrid stroke="#1c2940" strokeDasharray="3 5" vertical={false} />
+                  <XAxis dataKey="hour" tickFormatter={(value: string) => new Date(value).toLocaleTimeString([], { hour: "2-digit" })} tick={{ fill: "#73849e", fontSize: 10 }} />
+                  <YAxis tick={{ fill: "#73849e", fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <Tooltip
+                    labelFormatter={(value) => formatDate(value)}
+                    contentStyle={{ background: "#0b1221", border: "1px solid #264056", borderRadius: 10 }}
+                  />
+                  {(["CS", "PS", "VoLTE"] as const).map((networkType) => (
+                    reportNetwork === "all" || reportNetwork === networkType
+                      ? <Area key={networkType} type="monotone" dataKey={networkType} name={`${networkType} Core`} stroke={trendColors[networkType]} fill="none" connectNulls={false} />
+                      : null
+                  ))}
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <EmptyState text={token ? "No KPI samples in this time window. Ingest core-network KPIs to populate the hourly report." : "Connect with an API token to load hourly reports."} />
+            )}
+          </div>
+          <div className="report-source-note">
+            Hourly robot checks run on the backend and this report refreshes every 60 seconds while open.
+            Live CS/PS core or VoLTE measurements require a configured NMS/vendor feed to send KPI records to the API.
+          </div>
+        </section>
+        <section className="panel">
+          <div className="panel-heading">
+            <div><span className="eyebrow">HOURLY AGGREGATION</span><h2>Pivot Summary</h2><p>Grouped by network, metric and hour; change compares with the previous available hour.</p></div>
+            <span className="counter">{hourlyReport?.record_count ?? 0} source records</span>
+          </div>
+          <Table
+            data={[...(hourlyReport?.items ?? [])].reverse()}
+            empty="No KPI records available for this report period."
+            columns={[
+              { label: "NETWORK", render: (item) => <span className="network-tag">{field(item, ["network_type"])}</span> },
+              { label: "METRIC", render: (item) => <strong>{field(item, ["metric_name"])}</strong> },
+              { label: "HOUR", render: (item) => formatDate(field(item, ["hour"])) },
+              { label: "SAMPLES", render: (item) => number(field(item, ["samples"], 0), 0) },
+              { label: "AVERAGE", render: (item) => `${number(field(item, ["average"]))} ${field(item, ["unit"], "")}` },
+              { label: "MIN / MAX", render: (item) => `${number(field(item, ["minimum"]))} / ${number(field(item, ["maximum"]))}` },
+              { label: "CHANGE", render: (item) => {
+                const direction = String(field(item, ["direction"], "NO_BASELINE"));
+                return direction === "NO_BASELINE" ? "—" : <span className={`trend-value ${direction.toLowerCase()}`}>{item.change_percent === null ? direction : `${number(item.change_percent)}% ${direction}`}</span>;
+              } }
+            ]}
+          />
+        </section>
+      </div>
+    );
+  };
+
   const renderAlerts = () => (
     <section className="panel">
       <div className="panel-heading">
@@ -630,6 +871,7 @@ export default function App() {
   const content = {
     Overview: renderOverview,
     "Network KPIs": renderKpis,
+    "Hourly Reports": renderHourlyReports,
     "Alerts Center": renderAlerts,
     "Automation Jobs": renderJobs,
     Thresholds: renderThresholds,
@@ -651,17 +893,17 @@ export default function App() {
         <div className="tenant-card"><div className="tenant-avatar"><Network size={18} /></div><div><strong>Telecom RPA</strong><small>Control Center</small></div><ChevronRight size={15} /></div>
         <nav className="sidebar-nav">
           <span className="nav-heading">MONITORING</span>
-          {navItems.slice(0, 3).map(({ label, icon: Icon }) => (
+          {navItems.slice(0, 4).map(({ label, icon: Icon }) => (
             <button key={label} className={`nav-item ${section === label ? "active" : ""}`} onClick={() => { setSection(label); setMobileNav(false); }}>
               <Icon size={17} /><span>{label}</span>{label === "Alerts Center" && activeAlerts.length > 0 && <i className="nav-count">{activeAlerts.length}</i>}
             </button>
           ))}
           <span className="nav-heading">AUTOMATION</span>
-          {navItems.slice(3, 5).map(({ label, icon: Icon }) => (
+          {navItems.slice(4, 6).map(({ label, icon: Icon }) => (
             <button key={label} className={`nav-item ${section === label ? "active" : ""}`} onClick={() => { setSection(label); setMobileNav(false); }}><Icon size={17} /><span>{label}</span></button>
           ))}
           <span className="nav-heading">ADMINISTRATION</span>
-          {navItems.slice(5).map(({ label, icon: Icon }) => (
+          {navItems.slice(6).map(({ label, icon: Icon }) => (
             <button key={label} className={`nav-item ${section === label ? "active" : ""}`} onClick={() => { setSection(label); setMobileNav(false); }}><Icon size={17} /><span>{label}</span></button>
           ))}
         </nav>

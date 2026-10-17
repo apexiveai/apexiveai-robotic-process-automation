@@ -367,6 +367,17 @@ button:disabled { opacity: .48; cursor: not-allowed; }
 .inline-form label, .job-form label { display: flex; flex-direction: column; flex: 1; min-width: 125px; gap: 7px; color: #8599b4; font-size: 9px; }
 .inline-form label select, .job-form label select { color-scheme: dark; }
 .table-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 16px 0; }
+.report-toolbar { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; margin: 0 0 18px; padding: 13px; border: 1px solid var(--border); border-radius: 9px; background: rgba(5,11,23,.35); }
+.report-toolbar label { display: flex; flex-direction: column; gap: 7px; color: #8599b4; font-size: 9px; }
+.report-toolbar .dark-select { min-width: 150px; }
+.report-refresh-state { display: inline-flex; align-items: center; gap: 7px; min-height: 34px; margin-left: auto; color: #7e93ae; font-size: 9px; }
+.report-stats { margin-bottom: 13px; }
+.report-chart { height: 285px; }
+.report-source-note { margin-top: 13px; padding: 12px; border: 1px solid rgba(255,191,105,.15); border-radius: 8px; color: #c7a979; background: rgba(255,191,105,.035); font-size: 10px; line-height: 1.7; }
+.trend-value { font-size: 9px; font-weight: 600; white-space: nowrap; }
+.trend-value.up { color: var(--green); }
+.trend-value.down { color: var(--danger); }
+.trend-value.flat { color: #9aabc2; }
 .search-box { display: flex; align-items: center; gap: 9px; min-width: 200px; width: min(100%, 340px); padding: 0 11px; min-height: 35px; border: 1px solid rgba(105,144,186,.2); border-radius: 7px; background: #080f1f; color: #7589a5; }
 .search-box input { width: 100%; min-width: 0; border: 0; outline: none; background: transparent; color: #dce9fa; font-size: 10px; }
 .search-box input:focus-visible { outline: none; }
@@ -483,6 +494,10 @@ button:disabled { opacity: .48; cursor: not-allowed; }
   .token-form { width: 100%; min-width: 0; }
   .token-form .primary-button { padding: 0 10px; }
   .table-toolbar { align-items: stretch; }
+  .report-toolbar { align-items: stretch; }
+  .report-toolbar label, .report-toolbar .dark-select { width: 100%; max-width: none; }
+  .report-refresh-state { margin-left: 0; }
+  .report-chart { height: 230px; }
   .search-box { min-width: 0; }
   .inline-form, .job-form { gap: 10px; padding: 11px; }
   .inline-form label, .job-form label { min-width: calc(50% - 8px); }

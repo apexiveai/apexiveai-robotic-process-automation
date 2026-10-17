@@ -2,12 +2,18 @@
 import os
 import json
 import secrets
+from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 from contextlib import asynccontextmanager
+from io import BytesIO
 from typing import Literal
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Depends, HTTPException, Header
+from fastapi.responses import Response
+from openpyxl import Workbook
+from openpyxl.chart import LineChart, Reference
+from openpyxl.styles import Font, PatternFill
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import (
     create_engine, String, Integer, Float, Boolean,
@@ -258,19 +264,54 @@ def execute_job_record(db: Session, row: AutomationJob) -> dict:
 
     try:
         if row.job_type == "KPI_REPORT":
-            total = db.scalar(
-                select(KPIRecord.id).limit(1)
+            report_rows, hourly_items = hourly_report_data(db, 2)
+            current_hour = datetime.now(timezone.utc).replace(
+                minute=0,
+                second=0,
+                microsecond=0,
             )
-            count = len(db.scalars(select(KPIRecord.id)).all())
-            latest = db.scalar(
-                select(KPIRecord)
-                .order_by(KPIRecord.recorded_at.desc())
-                .limit(1)
+            current_items = [
+                item for item in hourly_items if item["hour"] == current_hour
+            ]
+            network_counts = {
+                network: sum(
+                    item["samples"] for item in current_items
+                    if item["network_type"] == network
+                )
+                for network in ("CS", "PS", "VoLTE")
+            }
+            latest_rows = [
+                record for record in report_rows
+                if (
+                    record.recorded_at.replace(tzinfo=timezone.utc)
+                    if record.recorded_at.tzinfo is None
+                    else record.recorded_at.astimezone(timezone.utc)
+                ).replace(minute=0, second=0, microsecond=0) == current_hour
+            ]
+            latest = max(
+                latest_rows,
+                key=lambda record: record.recorded_at,
+                default=None,
             )
 
             output = {
                 "workflow": "KPI_REPORT",
-                "total_kpi_records": count,
+                "window_hours": 2,
+                "records_checked": sum(network_counts.values()),
+                "records_by_network": network_counts,
+                "current_hour": current_hour.isoformat(),
+                "data_status": (
+                    "CURRENT_HOUR_DATA_AVAILABLE"
+                    if current_items
+                    else "NO_CURRENT_HOUR_DATA"
+                ),
+                "hourly_trends": [
+                    {
+                        **item,
+                        "hour": item["hour"].isoformat(),
+                    }
+                    for item in current_items
+                ],
                 "latest_kpi": (
                     {
                         "network_type": latest.network_type,
@@ -598,6 +639,184 @@ def alert_dict(row: AnomalyAlert) -> dict:
     }
 
 
+def hourly_report_data(
+    db: Session,
+    hours: int,
+    network_type: str | None = None,
+) -> tuple[list[KPIRecord], list[dict]]:
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(hours=hours)
+    stmt = select(KPIRecord).where(
+        KPIRecord.recorded_at >= cutoff,
+        KPIRecord.recorded_at <= now,
+    ).order_by(KPIRecord.recorded_at.asc())
+
+    if network_type:
+        stmt = stmt.where(KPIRecord.network_type == network_type)
+
+    records = db.scalars(stmt).all()
+    buckets: dict[tuple[str, str, str, datetime], list[float]] = defaultdict(list)
+
+    for record in records:
+        recorded_at = record.recorded_at
+        if recorded_at.tzinfo is None:
+            recorded_at = recorded_at.replace(tzinfo=timezone.utc)
+        recorded_at = recorded_at.astimezone(timezone.utc)
+        hour = recorded_at.replace(minute=0, second=0, microsecond=0)
+        buckets[
+            (record.network_type, record.metric_name, record.unit, hour)
+        ].append(record.value)
+
+    items: list[dict] = []
+    previous_values: dict[tuple[str, str, str], float] = {}
+    for network, metric, unit, hour in sorted(buckets):
+        values = buckets[(network, metric, unit, hour)]
+        average = sum(values) / len(values)
+        identity = (network, metric, unit)
+        previous = previous_values.get(identity)
+        change_percent = (
+            ((average - previous) / abs(previous)) * 100
+            if previous not in (None, 0)
+            else None
+        )
+        direction = (
+            "NO_BASELINE" if previous is None
+            else "UP" if average > previous
+            else "DOWN" if average < previous
+            else "FLAT"
+        )
+        items.append({
+            "network_type": network,
+            "metric_name": metric,
+            "unit": unit,
+            "hour": hour,
+            "samples": len(values),
+            "average": average,
+            "minimum": min(values),
+            "maximum": max(values),
+            "change_percent": change_percent,
+            "direction": direction,
+        })
+        previous_values[identity] = average
+
+    return records, items
+
+
+def create_hourly_workbook(
+    records: list[KPIRecord],
+    items: list[dict],
+) -> BytesIO:
+    workbook = Workbook()
+    data_sheet = workbook.active
+    data_sheet.title = "KPI Data"
+    data_sheet.append([
+        "ID", "Network", "Metric", "Value", "Unit", "Source", "Recorded At (UTC)"
+    ])
+
+    for record in records:
+        recorded_at = record.recorded_at
+        if recorded_at.tzinfo is None:
+            recorded_at = recorded_at.replace(tzinfo=timezone.utc)
+        data_sheet.append([
+            record.id,
+            record.network_type,
+            record.metric_name,
+            record.value,
+            record.unit,
+            record.source,
+            recorded_at.astimezone(timezone.utc).replace(tzinfo=None),
+        ])
+
+    pivot_sheet = workbook.create_sheet("Hourly Pivot")
+    series = sorted({
+        (item["network_type"], item["metric_name"], item["unit"])
+        for item in items
+    })
+    hours = sorted({item["hour"] for item in items})
+    series_labels = [
+        f"{network}/{metric} ({unit})"
+        for network, metric, unit in series
+    ]
+    pivot_sheet.append(["Hour (UTC)", *series_labels])
+    values_by_hour = {
+        (item["hour"], item["network_type"], item["metric_name"], item["unit"]):
+        item["average"]
+        for item in items
+    }
+
+    for hour in hours:
+        pivot_sheet.append([
+            hour.replace(tzinfo=None),
+            *[
+                values_by_hour.get((hour, network, metric, unit))
+                for network, metric, unit in series
+            ],
+        ])
+
+    if hours and series:
+        chart = LineChart()
+        chart.title = "Hourly KPI Averages by Network and Metric"
+        chart.style = 13
+        chart.y_axis.title = "Average value"
+        chart.x_axis.title = "Hour (UTC)"
+        chart.height = 10
+        chart.width = 24
+        chart.add_data(
+            Reference(
+                pivot_sheet,
+                min_col=2,
+                max_col=len(series) + 1,
+                min_row=1,
+                max_row=len(hours) + 1,
+            ),
+            titles_from_data=True,
+        )
+        chart.set_categories(
+            Reference(pivot_sheet, min_col=1, min_row=2, max_row=len(hours) + 1)
+        )
+        pivot_sheet.add_chart(chart, f"A{len(hours) + 4}")
+
+    detail_sheet = workbook.create_sheet("Hourly Detail")
+    detail_sheet.append([
+        "Network", "Metric", "Unit", "Hour (UTC)", "Samples",
+        "Average", "Minimum", "Maximum", "Change (%)", "Direction",
+    ])
+    for item in items:
+        detail_sheet.append([
+            item["network_type"],
+            item["metric_name"],
+            item["unit"],
+            item["hour"].replace(tzinfo=None),
+            item["samples"],
+            item["average"],
+            item["minimum"],
+            item["maximum"],
+            item["change_percent"],
+            item["direction"],
+        ])
+
+    for sheet in workbook.worksheets:
+        sheet.freeze_panes = "A2"
+        sheet.auto_filter.ref = sheet.dimensions
+        for cell in sheet[1]:
+            cell.font = Font(color="FFFFFF", bold=True)
+            cell.fill = PatternFill("solid", fgColor="17365D")
+        for column in sheet.columns:
+            width = min(
+                max(
+                    len(str(cell.value or ""))
+                    for cell in list(column)[:100]
+                ) + 2,
+                36,
+            )
+            sheet.column_dimensions[column[0].column_letter].width = width
+
+    output = BytesIO()
+    workbook.save(output)
+    output.seek(0)
+    return output
+
+
 @app.get("/")
 def root():
     return {
@@ -646,7 +865,12 @@ def license_status(db: Session = Depends(get_db)):
 
 @app.post("/api/v1/kpis", dependencies=[Depends(require_token)])
 def create_kpi(data: KPIInput, db: Session = Depends(get_db)):
-    row = KPIRecord(**data.model_dump())
+    values = data.model_dump()
+    recorded_at = data.recorded_at
+    if recorded_at.tzinfo is None:
+        recorded_at = recorded_at.replace(tzinfo=timezone.utc)
+    values["recorded_at"] = recorded_at.astimezone(timezone.utc)
+    row = KPIRecord(**values)
     db.add(row)
     db.commit()
     db.refresh(row)
@@ -696,6 +920,52 @@ def list_kpis(
         }
         for r in rows
     ]
+
+
+@app.get("/api/v1/reports/hourly", dependencies=[Depends(require_token)])
+def get_hourly_report(
+    hours: int = 24,
+    network_type: Literal["PS", "CS", "VoLTE"] | None = None,
+    db: Session = Depends(get_db),
+):
+    if not 1 <= hours <= 168:
+        raise HTTPException(422, "hours must be between 1 and 168")
+
+    records, items = hourly_report_data(db, hours, network_type)
+    return {
+        "generated_at": datetime.now(timezone.utc),
+        "window_hours": hours,
+        "record_count": len(records),
+        "items": items,
+    }
+
+
+@app.get(
+    "/api/v1/reports/hourly.xlsx",
+    dependencies=[Depends(require_token)],
+)
+def download_hourly_report(
+    hours: int = 24,
+    network_type: Literal["PS", "CS", "VoLTE"] | None = None,
+    db: Session = Depends(get_db),
+):
+    if not 1 <= hours <= 168:
+        raise HTTPException(422, "hours must be between 1 and 168")
+
+    records, items = hourly_report_data(db, hours, network_type)
+    workbook = create_hourly_workbook(records, items)
+    return Response(
+        content=workbook.getvalue(),
+        media_type=(
+            "application/vnd.openxmlformats-officedocument."
+            "spreadsheetml.sheet"
+        ),
+        headers={
+            "Content-Disposition": (
+                'attachment; filename="telecom-hourly-report.xlsx"'
+            ),
+        },
+    )
 
 
 @app.post("/api/v1/thresholds", dependencies=[Depends(require_token)])
