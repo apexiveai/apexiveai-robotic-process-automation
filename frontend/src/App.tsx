@@ -4,8 +4,8 @@ import {
   ChevronRight, CircleHelp, Clock3, Command, Cpu,
   Database, Download, FileSpreadsheet, Gauge, Globe2,
   LayoutDashboard, LoaderCircle, LockKeyhole, Menu, Network,
-  Play, RadioTower, RefreshCw, RotateCcw, Search, Send, ShieldCheck,
-  Signal, TerminalSquare, Wifi, X, Zap
+  MapPin, Play, RadioTower, RefreshCw, RotateCcw, Search, Send, Server, ShieldCheck,
+  Signal, TerminalSquare, Users, Wifi, X, Zap
 } from "lucide-react";
 import {
   Area, AreaChart, CartesianGrid, ResponsiveContainer,
@@ -20,13 +20,39 @@ import {
 } from "./api";
 
 type Item = Record<string, unknown>;
+type NodeStatus = "ONLINE" | "DEGRADED" | "CRITICAL" | "OFFLINE";
+type NetworkNode = {
+  id: string;
+  type: string;
+  region: string;
+  status: NodeStatus;
+  cpu: number;
+  memory: number;
+  traffic: number;
+  sessions: number;
+  latency: number;
+  packetLoss: number;
+  lastCheck: string;
+};
 type Section =
   | "Overview"
+  | "Network Topology"
+  | "Geographic Map"
   | "Network KPIs"
   | "Hourly Reports"
+  | "Historical KPI Timeline"
   | "Alerts Center"
+  | "Service Health"
+  | "Network Dependency Map"
   | "Automation Jobs"
+  | "Workflow Monitor"
+  | "RPA Execution History"
   | "Thresholds"
+  | "Performance Analytics"
+  | "Traffic Analytics"
+  | "AI Predictions"
+  | "API / Integration"
+  | "System Settings"
   | "License"
   | "Audit Logs";
 
@@ -36,13 +62,131 @@ const navItems: {
 }[] = [
   { label: "Overview", icon: LayoutDashboard },
   { label: "Network KPIs", icon: Signal },
+  { label: "Network Topology", icon: Network },
+  { label: "Geographic Map", icon: Globe2 },
   { label: "Hourly Reports", icon: FileSpreadsheet },
+  { label: "Historical KPI Timeline", icon: Activity },
   { label: "Alerts Center", icon: Bell },
+  { label: "Service Health", icon: CheckCircle2 },
+  { label: "Network Dependency Map", icon: Network },
   { label: "Automation Jobs", icon: Bot },
+  { label: "Workflow Monitor", icon: Activity },
+  { label: "RPA Execution History", icon: Clock3 },
   { label: "Thresholds", icon: Gauge },
+  { label: "Performance Analytics", icon: Activity },
+  { label: "Traffic Analytics", icon: Activity },
+  { label: "AI Predictions", icon: Zap },
+  { label: "API / Integration", icon: Database },
+  { label: "System Settings", icon: ShieldCheck },
   { label: "License", icon: ShieldCheck },
   { label: "Audit Logs", icon: TerminalSquare }
 ];
+
+const navGroups: { heading: string; sections: Section[] }[] = [
+  { heading: "MONITORING", sections: ["Overview", "Network KPIs", "Network Topology", "Geographic Map", "Hourly Reports", "Historical KPI Timeline", "Alerts Center", "Service Health", "Network Dependency Map"] },
+  { heading: "AUTOMATION", sections: ["Automation Jobs", "Workflow Monitor", "RPA Execution History", "Thresholds"] },
+  { heading: "ANALYTICS", sections: ["Performance Analytics", "Traffic Analytics", "AI Predictions"] },
+  { heading: "ADMINISTRATION", sections: ["API / Integration", "License", "Audit Logs", "System Settings"] }
+];
+
+const geographicRegions = [
+  { name: "Mandalay", status: "ONLINE" as NodeStatus, x: 61, y: 28, cells: 18, availability: "99.8%", traffic: "4.62 TB", cellIds: [{ id: "MDY-001", status: "ONLINE" as NodeStatus }, { id: "MDY-002", status: "ONLINE" as NodeStatus }, { id: "MDY-003", status: "ONLINE" as NodeStatus }] },
+  { name: "Naypyidaw", status: "ONLINE" as NodeStatus, x: 49, y: 51, cells: 12, availability: "99.7%", traffic: "2.18 TB", cellIds: [{ id: "NPT-001", status: "ONLINE" as NodeStatus }, { id: "NPT-002", status: "DEGRADED" as NodeStatus }] },
+  { name: "Yangon", status: "CRITICAL" as NodeStatus, x: 40, y: 73, cells: 46, availability: "98.1%", traffic: "8.72 TB", cellIds: [{ id: "AHLONE-001", status: "ONLINE" as NodeStatus }, { id: "AHLONE-002", status: "ONLINE" as NodeStatus }, { id: "AHLONE-003", status: "CRITICAL" as NodeStatus }] },
+  { name: "Dawei", status: "DEGRADED" as NodeStatus, x: 57, y: 91, cells: 9, availability: "97.4%", traffic: "1.06 TB", cellIds: [{ id: "DWI-001", status: "DEGRADED" as NodeStatus }, { id: "DWI-002", status: "ONLINE" as NodeStatus }] }
+];
+
+const historyMetrics = ["Availability", "Traffic", "CSSR", "DCR", "VoLTE", "Latency"] as const;
+type HistoryMetric = typeof historyMetrics[number];
+
+const nodeRegions = ["Yangon", "Mandalay", "Naypyidaw", "Bago", "Mawlamyine"];
+const nodeTypes = ["BTS", "NodeB", "eNB", "gNodeB", "MSC", "HLR/HSS", "SGSN", "SGW", "PGW", "IMS"];
+const nodeStatuses: NodeStatus[] = ["ONLINE", "ONLINE", "ONLINE", "DEGRADED", "ONLINE", "CRITICAL", "OFFLINE"];
+
+function createNetworkNodes(): NetworkNode[] {
+  const nodes: NetworkNode[] = [{
+    id: "MPT-CORE-04",
+    type: "PGW",
+    region: "Yangon",
+    status: "ONLINE",
+    cpu: 42,
+    memory: 61,
+    traffic: 1.82,
+    sessions: 84291,
+    latency: 18,
+    packetLoss: 0.2,
+    lastCheck: ""
+  }];
+
+  for (let index = 1; index < 100; index += 1) {
+    const type = nodeTypes[(index - 1) % nodeTypes.length];
+    const status = nodeStatuses[(index * 3) % nodeStatuses.length];
+    nodes.push({
+      id: `MPT-${type === "BTS" || type === "NodeB" || type === "eNB" || type === "gNodeB" ? "RAN" : "CORE"}-${String(index + 1).padStart(2, "0")}`,
+      type,
+      region: nodeRegions[index % nodeRegions.length],
+      status,
+      cpu: 24 + ((index * 17) % 67),
+      memory: 32 + ((index * 13) % 62),
+      traffic: Number((0.4 + ((index * 29) % 220) / 100).toFixed(2)),
+      sessions: 12500 + ((index * 7919) % 96000),
+      latency: 9 + ((index * 7) % 45),
+      packetLoss: Number((((index * 11) % 17) / 100).toFixed(2)),
+      lastCheck: ""
+    });
+  }
+
+  return nodes;
+}
+
+const demoNetworkNodes = createNetworkNodes();
+
+const topologyNodes = [
+  { id: "MPT-RAN-2G-01", type: "BTS", label: "2G · BTS", region: "Yangon" },
+  { id: "MPT-RAN-3G-01", type: "NodeB", label: "3G · NodeB", region: "Yangon" },
+  { id: "MPT-RAN-4G-01", type: "eNB", label: "4G · eNodeB", region: "Yangon" },
+  { id: "MPT-RAN-5G-01", type: "gNodeB", label: "5G · gNodeB", region: "Yangon" },
+  { id: "MPT-CORE-CS-01", type: "MSC", label: "CS · MSC", region: "Yangon" },
+  { id: "MPT-CORE-HSS-01", type: "HLR/HSS", label: "HLR / HSS", region: "Yangon" },
+  { id: "MPT-CORE-SGSN-01", type: "SGSN", label: "PS · SGSN", region: "Yangon" },
+  { id: "MPT-CORE-SGW-01", type: "SGW", label: "4G · SGW", region: "Yangon" },
+  { id: "MPT-CORE-04", type: "PGW", label: "4G · PGW", region: "Yangon" },
+  { id: "MPT-CORE-IMS-01", type: "IMS", label: "VoLTE · IMS", region: "Yangon" }
+];
+
+const cellSites = [
+  {
+    region: "AHLONE",
+    btsId: "MPT-BTS-AHLONE-01",
+    enodebId: "MPT-ENB-YGN-01",
+    cells: [
+      { id: "AHLONE-001", status: "ONLINE" as NodeStatus },
+      { id: "AHLONE-002", status: "ONLINE" as NodeStatus },
+      { id: "AHLONE-003", status: "CRITICAL" as NodeStatus }
+    ]
+  },
+  {
+    region: "NayPyiTaw",
+    btsId: "MPT-BTS-NPT-01",
+    enodebId: "MPT-ENB-NPT-01",
+    cells: [
+      { id: "NPT-001", status: "ONLINE" as NodeStatus },
+      { id: "NPT-002", status: "DEGRADED" as NodeStatus }
+    ]
+  },
+  {
+    region: "HANTHARWATI",
+    btsId: "MPT-BTS-HTWT-01",
+    enodebId: "MPT-ENB-HTWT-01",
+    cells: [
+      { id: "HTWT-001", status: "ONLINE" as NodeStatus }
+    ]
+  }
+];
+
+function nodeStatusClass(status: NodeStatus) {
+  return `node-status ${status.toLowerCase()}`;
+}
 
 function rows(value: unknown): Item[] {
   if (Array.isArray(value)) return value.filter(Boolean) as Item[];
@@ -160,6 +304,17 @@ export default function App() {
   const [section, setSection] = useState<Section>("Overview");
   const [mobileNav, setMobileNav] = useState(false);
   const [network, setNetwork] = useState("all");
+  const [selectedNodeId, setSelectedNodeId] = useState("MPT-CORE-04");
+  const [selectedCell, setSelectedCell] = useState("AHLONE-001");
+  const [alarmDetailsOpen, setAlarmDetailsOpen] = useState(false);
+  const [automationWorkflowOpen, setAutomationWorkflowOpen] = useState(false);
+  const [selectedRegion, setSelectedRegion] = useState("Yangon");
+  const [selectedMapCell, setSelectedMapCell] = useState("AHLONE-001");
+  const [dependencyTarget, setDependencyTarget] = useState<"PGW-01" | "IMS-02">("PGW-01");
+  const [timelineMetric, setTimelineMetric] = useState<HistoryMetric>("Availability");
+  const [topologyPage, setTopologyPage] = useState(1);
+  const [pageInput, setPageInput] = useState("1");
+  const [topologyUpdatedAt, setTopologyUpdatedAt] = useState(() => new Date());
   const [loading, setLoading] = useState(false);
   const [health, setHealth] = useState<"checking" | "online" | "offline">("checking");
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -188,6 +343,11 @@ export default function App() {
   const [metricName, setMetricName] = useState("availability");
   const [metricValue, setMetricValue] = useState("98.5");
   const [metricUnit, setMetricUnit] = useState("%");
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setTopologyUpdatedAt(new Date()), 10_000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   const loadData = useCallback(async (activeToken: string) => {
     setLoading(true);
@@ -258,7 +418,7 @@ export default function App() {
   }, [reportHours, reportNetwork]);
 
   useEffect(() => {
-    if (!token || section !== "Hourly Reports") return;
+    if (!token || !["Hourly Reports", "Historical KPI Timeline", "Performance Analytics", "Traffic Analytics"].includes(section)) return;
     const initialLoad = window.setTimeout(() => {
       void loadHourlyReport(token);
     }, 0);
@@ -372,6 +532,37 @@ export default function App() {
     }
     return latest;
   }, [hourlyReport, selectedReportMetric]);
+
+  const selectedNode = demoNetworkNodes.find((node) => node.id === selectedNodeId) ?? demoNetworkNodes[0];
+  const selectedPageNode = demoNetworkNodes[topologyPage - 1] ?? demoNetworkNodes[0];
+
+  const selectTopologyNode = (node: NetworkNode) => {
+    setSelectedNodeId(node.id);
+    const page = demoNetworkNodes.findIndex((item) => item.id === node.id) + 1;
+    if (page > 0) {
+      setTopologyPage(page);
+      setPageInput(String(page));
+    }
+  };
+
+  const goToTopologyPage = (page: number) => {
+    const safePage = Math.min(100, Math.max(1, page));
+    const node = demoNetworkNodes[safePage - 1];
+    setTopologyPage(safePage);
+    setPageInput(String(safePage));
+    setSelectedNodeId(node.id);
+  };
+
+  const submitTopologyPage = (event: React.FormEvent) => {
+    event.preventDefault();
+    const page = Number(pageInput);
+    if (!Number.isInteger(page) || page < 1 || page > 100) {
+      setError("Choose a node page from 1 to 100.");
+      return;
+    }
+    setError("");
+    goToTopologyPage(page);
+  };
 
   const resolve = async (item: Item) => {
     const id = field(item, ["id", "alert_id"]);
@@ -604,6 +795,390 @@ export default function App() {
       </div>
     </>
   );
+
+  const renderTopology = () => {
+    const statusCounts = demoNetworkNodes.reduce<Record<NodeStatus, number>>((counts, node) => {
+      counts[node.status] += 1;
+      return counts;
+    }, { ONLINE: 0, DEGRADED: 0, CRITICAL: 0, OFFLINE: 0 });
+    const allCells = cellSites.flatMap((site) => site.cells.map((cell) => ({ site, cell })));
+    const selectedCellInfo = allCells.find(({ cell }) => cell.id === selectedCell) ?? allCells[0];
+    const cellIndex = allCells.findIndex(({ cell }) => cell.id === selectedCell);
+    const activeUsers = 820 + Math.max(0, cellIndex) * 173;
+    const cellStatus = selectedCellInfo.cell.status;
+    const trafficStages = [
+      { label: "BTS", type: "BTS" },
+      { label: "eNodeB", type: "eNB", rate: "820 Mbps" },
+      { label: "SGW", type: "SGW", rate: "1.4 Gbps" },
+      { label: "PGW", type: "PGW", rate: "1.2 Gbps" },
+      { label: "INTERNET", rate: "UPLINK" }
+    ];
+    const automationJobs = [
+      { name: "Hourly KPI Collection", status: "RUNNING" },
+      { name: "Traffic Report", status: "COMPLETED" },
+      { name: "Threshold Monitoring", status: "RUNNING" },
+      { name: "Alarm Detection", status: "RUNNING" },
+      { name: "Daily Report Generation", status: "SCHEDULED" },
+      { name: "Incident Analysis", status: "2 QUEUED" }
+    ];
+    const redNodeWorkflow = [
+      { title: "Detect abnormal KPI", detail: "Cell availability is 91.4%, below the 95% threshold." },
+      { title: "Collect related KPIs", detail: "Gather availability, traffic, drop rate, and radio quality." },
+      { title: "Compare threshold", detail: "Confirm the critical availability breach against the configured limit." },
+      { title: "Identify affected cells", detail: "Trace the alarm from AHLONE-003 through eNodeB-07." },
+      { title: "Generate incident", detail: "Create incident MPT-20261017-0842 with critical severity." },
+      { title: "Notify operation team", detail: "Prepare an engineer notification for the affected region." },
+      { title: "Generate report", detail: "Compile the alarm evidence and recovery workflow summary." }
+    ];
+    const coreHealthMetrics = [
+      { label: "NETWORK HEALTH", value: "98.7%", detail: "Overall service availability", icon: Activity, tone: "cyan" },
+      { label: "RAN AVAILABILITY", value: "99.2%", detail: "Radio access network", icon: RadioTower, tone: "blue" },
+      { label: "CORE HEALTH", value: "99.8%", detail: "Core nodes operational", icon: Server, tone: "purple" },
+      { label: "VoLTE SUCCESS", value: "97.6%", detail: "Call setup success", icon: Signal, tone: "cyan" },
+      { label: "DATA TRAFFIC", value: "18.42 TB", detail: "Aggregate traffic volume", icon: Database, tone: "blue" },
+      { label: "ACTIVE USERS", value: "2.84 M", detail: "Current subscriber sessions", icon: Users, tone: "purple" },
+      { label: "ACTIVE ALARMS", value: "07", detail: "Across monitored network", icon: Bell, tone: "pink" }
+    ];
+
+    return (
+      <div className="topology-page">
+        <div className="stats-grid topology-stats">
+          <StatCard label="NODES MONITORED" value="100" detail="Demo inventory · Yangon region" icon={Network} tone="cyan" />
+          <StatCard label="ONLINE" value={number(statusCounts.ONLINE, 0)} detail="Reporting normally" icon={CheckCircle2} tone="cyan" />
+          <StatCard label="NEEDS ATTENTION" value={number(statusCounts.DEGRADED + statusCounts.CRITICAL, 0)} detail={`${statusCounts.DEGRADED} degraded · ${statusCounts.CRITICAL} critical`} icon={AlertTriangle} tone="pink" />
+          <StatCard label="OFFLINE" value={number(statusCounts.OFFLINE, 0)} detail="Demo status simulation" icon={Server} tone="purple" />
+        </div>
+
+        <div className="topology-layout">
+          <section className="panel topology-panel">
+            <div className="panel-heading">
+              <div>
+                <span className="eyebrow">MPT NETWORK · LIVE TOPOLOGY</span>
+                <h2>Radio Access & Core Network</h2>
+                <p>Choose a node to inspect its health and traffic telemetry.</p>
+              </div>
+              <div className="topology-heading-actions">
+                <button className="alarm-topology-badge" onClick={() => setAlarmDetailsOpen(true)}><AlertTriangle size={12} /> CRITICAL · AHLONE-003</button>
+                <span className="live-chip"><span className="pulse-dot" /> DEMO FEED</span>
+              </div>
+            </div>
+
+            <div className="topology-canvas" aria-label="Interactive MPT network topology">
+              <div className="topology-root">
+                <RadioTower size={17} />
+                <span>MPT NETWORK</span>
+                <small>YANGON NOC</small>
+              </div>
+              <svg className="topology-routes" viewBox="0 0 1000 390" preserveAspectRatio="none" aria-hidden="true">
+                <path d="M500 76 V106 M500 106 H255 V132 M500 106 H755 V132" />
+                <path className="route-accent" d="M500 76 V106 H755 V132" />
+              </svg>
+              <div className="topology-branches">
+                <section className="topology-domain ran-domain">
+                  <div className="domain-heading"><span>01</span><div><strong>RAN / BTS</strong><small>RADIO ACCESS</small></div></div>
+                  <div className="topology-node-list">
+                    {topologyNodes.slice(0, 4).map((item) => {
+                      const node = demoNetworkNodes.find((record) => record.type === item.type) ?? selectedNode;
+                      return (
+                        <button key={item.id} className={`topology-node ${selectedNode.id === node.id ? "selected" : ""}`} onClick={() => selectTopologyNode(node)}>
+                          <span className={`node-indicator ${node.status.toLowerCase()}`} />
+                          <strong>{item.label}</strong>
+                          <small>{node.id}</small>
+                          <span className={nodeStatusClass(node.status)}>{node.status}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+                <section className="topology-domain core-domain">
+                  <div className="domain-heading"><span>02</span><div><strong>CORE NETWORK</strong><small>CS · PS · IMS / VOLTE</small></div></div>
+                  <div className="core-topology-groups">
+                    {[
+                      topologyNodes.slice(4, 6),
+                      topologyNodes.slice(6, 9),
+                      topologyNodes.slice(9, 10)
+                    ].map((group, groupIndex) => (
+                      <div className="core-topology-row" key={groupIndex}>
+                        {group.map((item) => {
+                          const node = demoNetworkNodes.find((record) => record.type === item.type) ?? selectedNode;
+                          return (
+                            <button key={item.id} className={`topology-node ${selectedNode.id === node.id ? "selected" : ""}`} onClick={() => selectTopologyNode(node)}>
+                              <span className={`node-indicator ${node.status.toLowerCase()}`} />
+                              <strong>{item.label}</strong>
+                              <small>{node.id}</small>
+                              <span className={nodeStatusClass(node.status)}>{node.status}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="topology-internet"><Globe2 size={15} /> EXTERNAL SERVICES / INTERNET</div>
+                </section>
+              </div>
+            </div>
+
+            <div className="traffic-flow-panel">
+              <div className="traffic-flow-heading"><span className="eyebrow">REAL-TIME TRAFFIC FLOW</span><span className="live-chip"><span className="pulse-dot" /> FLOW SIMULATION</span></div>
+              <div className="traffic-flow" aria-label="Animated traffic flow from BTS to Internet">
+                {trafficStages.map((stage, index) => {
+                  const node = stage.type
+                    ? demoNetworkNodes.find((record) => record.type === stage.type)
+                    : undefined;
+                  const stageContent = (
+                    <>
+                      <span className={`traffic-node-icon ${stage.type === "BTS" || stage.type === "eNB" ? "access" : "core"}`}>{stage.type === "INTERNET" ? <Globe2 size={16} /> : <Server size={16} />}</span>
+                      <strong>{stage.label}</strong>
+                    </>
+                  );
+                  return (
+                    <div className="traffic-flow-segment" key={stage.label}>
+                      {index > 0 && <div className="traffic-link"><span>{stage.rate}</span><i><b /></i></div>}
+                      {node ? (
+                        <button className={`traffic-node ${selectedNode.id === node.id ? "selected" : ""}`} onClick={() => selectTopologyNode(node)} aria-label={`Select ${stage.label} node ${node.id}`}>
+                          {stageContent}
+                        </button>
+                      ) : <div className="traffic-node external">{stageContent}</div>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="topology-legend" aria-label="Node status legend">
+              {(["ONLINE", "DEGRADED", "CRITICAL", "OFFLINE"] as NodeStatus[]).map((status) => (
+                <span key={status}><i className={`node-indicator ${status.toLowerCase()}`} />{status}</span>
+              ))}
+              <span className="topology-refresh-time"><Clock3 size={12} /> Refreshed {topologyUpdatedAt.toLocaleTimeString()}</span>
+            </div>
+          </section>
+
+          <aside className="panel node-details">
+            <div className="panel-heading">
+              <div><span className="eyebrow">SELECTED DEVICE</span><h2>Node Details</h2></div>
+              <span className={`node-indicator large ${selectedNode.status.toLowerCase()}`} />
+            </div>
+            <div className="node-identity"><span className="node-type-icon"><Server size={21} /></span><div><strong>{selectedNode.id}</strong><small>{selectedNode.type} · MPT Network</small></div></div>
+            <div className="node-meta-grid">
+              <div><span>REGION</span><strong><MapPin size={12} />{selectedNode.region}</strong></div>
+              <div><span>STATUS</span><strong className={`detail-status ${selectedNode.status.toLowerCase()}`}>{selectedNode.status}</strong></div>
+            </div>
+            <div className="detail-metric-list">
+              <div><span>CPU</span><strong>{selectedNode.cpu}%</strong><i><b style={{ width: `${selectedNode.cpu}%` }} /></i></div>
+              <div><span>Memory</span><strong>{selectedNode.memory}%</strong><i><b style={{ width: `${selectedNode.memory}%` }} /></i></div>
+              <div><span>Traffic</span><strong>{selectedNode.traffic.toFixed(2)} Gbps</strong></div>
+              <div><span>Sessions</span><strong>{selectedNode.sessions.toLocaleString()}</strong></div>
+              <div><span>Latency</span><strong>{selectedNode.latency} ms</strong></div>
+              <div><span>Packet loss</span><strong>{selectedNode.packetLoss.toFixed(2)}%</strong></div>
+            </div>
+            <div className="node-last-check"><Clock3 size={13} /> Last check <strong>{topologyUpdatedAt.toLocaleTimeString()}</strong></div>
+            <p className="demo-data-note">Sample telemetry for UI validation. Connect an MPT/NMS collector before using operationally.</p>
+          </aside>
+        </div>
+
+        <section className="panel cell-monitor-panel">
+          <div className="panel-heading">
+            <div><span className="eyebrow">BTS → CELL → CORE</span><h2>Yangon Cell Monitoring</h2><p>Select a cell to inspect the cell-level KPI snapshot.</p></div>
+            <span className="counter">3 sites · 6 cells</span>
+          </div>
+          <div className="cell-drill-path" aria-label="Selected cell network path">
+            <span className="drill-root">YANGON</span>
+            <ChevronRight size={13} />
+            <span className="drill-site">{selectedCellInfo.site.region}</span>
+            <ChevronRight size={13} />
+            <button onClick={() => {
+              const node = demoNetworkNodes.find((record) => record.type === "BTS");
+              if (node) selectTopologyNode(node);
+            }}>BTS <small>{selectedCellInfo.site.btsId}</small></button>
+            <ChevronRight size={13} />
+            <span className={`drill-current ${cellStatus.toLowerCase()}`}><i className={`node-indicator ${cellStatus.toLowerCase()}`} />{selectedCellInfo.cell.id}</span>
+            <ChevronRight size={13} />
+            <button onClick={() => {
+              const node = demoNetworkNodes.find((record) => record.type === "eNB");
+              if (node) selectTopologyNode(node);
+            }}>eNodeB <small>{selectedCellInfo.site.enodebId}</small></button>
+            <ChevronRight size={13} />
+            <button onClick={() => {
+              const node = demoNetworkNodes.find((record) => record.type === "PGW");
+              if (node) selectTopologyNode(node);
+            }}>CORE <small>PGW · MPT-CORE-04</small></button>
+          </div>
+          <div className="cell-monitor-layout">
+            <div className="cell-site-list">
+              {cellSites.map((site) => (
+                <div className="cell-site" key={site.region}>
+                  <strong><MapPin size={13} />{site.region}</strong>
+                  <div>{site.cells.map((cell) => {
+                    return <button key={cell.id} className={`cell-chip ${selectedCell === cell.id ? "selected" : ""}`} onClick={() => {
+                      setSelectedCell(cell.id);
+                      if (cell.status === "CRITICAL") setAlarmDetailsOpen(true);
+                    }}><i className={`node-indicator ${cell.status.toLowerCase()}`} />{cell.id}{cell.status === "CRITICAL" && <span className="cell-alarm-label">ALARM</span>}</button>;
+                  })}</div>
+                </div>
+              ))}
+            </div>
+            <div className="cell-kpis">
+              <div className="cell-kpi-heading"><span>SELECTED CELL · {selectedCellInfo.site.region}</span><strong><i className={`node-indicator ${cellStatus.toLowerCase()}`} />{selectedCellInfo.cell.id}</strong></div>
+              {[
+                ["Active users", activeUsers.toLocaleString()],
+                ["Traffic", `${(0.18 + Math.max(0, cellIndex) * 0.07).toFixed(2)} Gbps`],
+                ["Throughput", `${48 + Math.max(0, cellIndex) * 6} Mbps`],
+                ["RSRP / RSRQ", "−91 dBm / −10 dB"],
+                ["SINR", "18 dB"],
+                ["Drop / Call setup", "0.4% / 98.7%"],
+                ["Handover / Availability", "97.9% / 99.96%"]
+              ].map(([label, value]) => <div className="cell-kpi" key={label}><span>{label}</span><strong>{value}</strong></div>)}
+            </div>
+          </div>
+        </section>
+
+        <section className={`panel alarm-overlay-panel ${alarmDetailsOpen ? "expanded" : ""}`} id="active-mpt-alarm">
+          <div className="panel-heading">
+            <div><span className="eyebrow">ALARM / INCIDENT OVERLAY</span><h2>Active Network Incident</h2><p>Critical cell alarm impact path and automated response status.</p></div>
+            <span className="status-pill danger">1 ACTIVE CRITICAL</span>
+          </div>
+          <button className="alarm-summary-button" onClick={() => {
+            setSelectedCell("AHLONE-003");
+            setAlarmDetailsOpen((open) => !open);
+          }} aria-expanded={alarmDetailsOpen}>
+            <span className="alarm-summary-icon"><AlertTriangle size={18} /></span>
+            <span className="alarm-summary-copy"><strong>CRITICAL · AHLONE-003</strong><small>Cell Availability below threshold · MPT-20261017-0842</small></span>
+            <span className="alarm-summary-action">{alarmDetailsOpen ? "Hide details" : "View alarm"}<ChevronRight size={14} /></span>
+          </button>
+          <div className="alarm-impact-path" aria-label="Alarm impact path from cell to core gateways">
+            <div className="alarm-path-node alarm-path-cell">
+              <span className="alarm-path-severity"><i className="node-indicator critical" /> CRITICAL</span>
+              <strong>AHLONE-003</strong><small>Cell · Availability 91.4%</small>
+            </div>
+            <span className="alarm-path-link"><i /></span>
+            <button className="alarm-path-node" onClick={() => {
+              const node = demoNetworkNodes.find((record) => record.type === "eNB");
+              if (node) selectTopologyNode(node);
+            }}><strong>eNodeB-07</strong><small>Radio access node</small></button>
+            <span className="alarm-path-split"><i /><i /></span>
+            <div className="alarm-path-gateways">
+              {["PGW-01", "PGW-02"].map((gateway, index) => (
+                <button className="alarm-path-node alarm-gateway" key={gateway} onClick={() => {
+                  const gateways = demoNetworkNodes.filter((record) => record.type === "PGW");
+                  const node = gateways[index] ?? gateways[0];
+                  if (node) selectTopologyNode(node);
+                }}><strong>{gateway}</strong><small><i className="node-indicator online" /> ONLINE</small></button>
+              ))}
+            </div>
+          </div>
+          {alarmDetailsOpen && (
+            <div className="alarm-details">
+              <div className="alarm-facts">
+                {[
+                  ["ALARM ID", "MPT-20261017-0842"],
+                  ["SEVERITY", "CRITICAL"],
+                  ["NODE", "AHLONE-003"],
+                  ["KPI", "Cell Availability"],
+                  ["CURRENT", "91.4%"],
+                  ["THRESHOLD", "95%"],
+                  ["STARTED", "16:02"],
+                  ["DURATION", "07m 42s"]
+                ].map(([label, value]) => <div className="alarm-fact" key={label}><span>{label}</span><strong className={label === "SEVERITY" ? "critical-text" : ""}>{value}</strong></div>)}
+              </div>
+              <div className="alarm-auto-actions">
+                <span className="eyebrow">AUTO ACTION · DEMO STATUS</span>
+                <div><CheckCircle2 size={14} /> Incident created</div>
+                <div><CheckCircle2 size={14} /> Engineer notified</div>
+                <div><CheckCircle2 size={14} /> RPA diagnostic started</div>
+              </div>
+              <p className="alarm-demo-note">Illustrative incident data only. No engineer notification or diagnostic job has been executed by this demo UI.</p>
+            </div>
+          )}
+        </section>
+
+        <section className="panel automation-engine-panel" id="rpa-automation-engine">
+          <div className="panel-heading">
+            <div><span className="eyebrow">5 · RPA AUTOMATION STATUS</span><h2>Automation Engine</h2><p>Operational workflow status linked to the active network incident.</p></div>
+            <span className="live-chip"><Bot size={13} /> DEMO ENGINE</span>
+          </div>
+          <div className="automation-status-grid">
+            {automationJobs.map((job) => (
+              <div className="automation-status-row" key={job.name}>
+                <span className={`automation-status-icon ${job.status === "COMPLETED" ? "done" : job.status === "2 QUEUED" ? "queued" : "active"}`}>
+                  {job.status === "COMPLETED" ? <CheckCircle2 size={14} /> : job.status === "2 QUEUED" ? <Clock3 size={14} /> : <Activity size={14} />}
+                </span>
+                <strong>{job.name}</strong>
+                <span className={`automation-state ${job.status === "COMPLETED" ? "done" : job.status === "2 QUEUED" ? "queued" : "active"}`}>{job.status}</span>
+              </div>
+            ))}
+          </div>
+          <div className="automation-explain">
+            <div className="automation-explain-copy">
+              <span className="eyebrow">INCIDENT DIAGNOSTICS</span>
+              <strong>Why is this node RED?</strong>
+              <small>Inspect the simulated RPA reasoning for AHLONE-003.</small>
+            </div>
+            <button className="small-action" onClick={() => setAutomationWorkflowOpen((open) => !open)} aria-expanded={automationWorkflowOpen}>
+              {automationWorkflowOpen ? "Hide workflow" : "Show workflow"} <ChevronRight size={13} />
+            </button>
+          </div>
+          {automationWorkflowOpen && (
+            <div className="automation-workflow">
+              <div className="workflow-heading"><span>ALARM MPT-20261017-0842 · AHLONE-003</span><span className="live-chip">SIMULATED TRACE</span></div>
+              <div className="workflow-steps">
+                {redNodeWorkflow.map((step, index) => (
+                  <div className="workflow-step" key={step.title}>
+                    <span className="workflow-step-number">{String(index + 1).padStart(2, "0")}</span>
+                    <div><strong>{step.title}</strong><small>{step.detail}</small></div>
+                    <CheckCircle2 size={14} />
+                  </div>
+                ))}
+              </div>
+              <p className="workflow-demo-note">Workflow steps illustrate the intended RPA process. This UI demo does not execute diagnostics, notify engineers, or generate a production incident report.</p>
+            </div>
+          )}
+        </section>
+
+        <section className="panel core-health-panel">
+          <div className="panel-heading">
+            <div><span className="eyebrow">6 · NETWORK PERFORMANCE</span><h2>Core Network Health</h2><p>Top-level RAN, core, service, traffic, and alarm indicators.</p></div>
+            <span className="live-chip"><span className="pulse-dot" /> SAMPLE METRICS</span>
+          </div>
+          <div className="core-health-grid">
+            {coreHealthMetrics.map(({ label, value, detail, icon: Icon, tone }) => (
+              <article className="core-health-card" key={label}>
+                <div className="core-health-card-top"><span>{label}</span><i className={`stat-icon ${tone}`}><Icon size={16} /></i></div>
+                <strong className={label === "ACTIVE ALARMS" ? "alarm-count-value" : ""}>{value}</strong>
+                <small>{detail}</small>
+                <i className={`core-health-line ${tone}`} />
+              </article>
+            ))}
+          </div>
+          <p className="health-demo-note">All values shown are sample UI demo data; they are not production network telemetry.</p>
+        </section>
+
+        <section className="panel node-inventory-panel">
+          <div className="panel-heading">
+            <div><span className="eyebrow">NODE INVENTORY</span><h2>Paginated Network Nodes</h2><p>Browse demo inventory by page and open a node in the topology.</p></div>
+            <span className="counter">100 nodes</span>
+          </div>
+          <div className="inventory-row">
+            <div className="inventory-current">
+              <span className="inventory-index">{String(topologyPage).padStart(3, "0")}</span>
+              <div><strong>{selectedPageNode.id}</strong><small>{selectedPageNode.type} · {selectedPageNode.region}</small></div>
+              <span className={nodeStatusClass(selectedPageNode.status)}>{selectedPageNode.status}</span>
+              <button className="small-action" onClick={() => selectTopologyNode(selectedPageNode)}>View node <ChevronRight size={12} /></button>
+            </div>
+            <div className="pagination">
+              <button className="page-button" onClick={() => goToTopologyPage(topologyPage - 1)} disabled={topologyPage === 1} aria-label="Previous page"><ChevronRight size={14} className="previous-chevron" /></button>
+              <form className="page-jump" onSubmit={submitTopologyPage}>
+                <label htmlFor="topology-page">Page</label>
+                <input id="topology-page" type="number" min="1" max="100" value={pageInput} onChange={(event) => setPageInput(event.target.value)} aria-label="Go to node page from 1 to 100" />
+                <span>/ 100</span>
+                <button className="page-button page-go" type="submit">Go</button>
+              </form>
+              <button className="page-button" onClick={() => goToTopologyPage(topologyPage + 1)} disabled={topologyPage === 100} aria-label="Next page"><ChevronRight size={14} /></button>
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+  };
 
   const renderKpis = () => (
     <section className="panel">
@@ -868,13 +1443,256 @@ export default function App() {
     </section>
   );
 
+  const renderGeographicMap = () => {
+    const region = geographicRegions.find((item) => item.name === selectedRegion) ?? geographicRegions[2];
+    const regionNodes = demoNetworkNodes.filter((node) => node.region === region.name);
+    return (
+      <div className="stack">
+        <section className="panel geographic-panel">
+          <div className="panel-heading">
+            <div><span className="eyebrow">MYANMAR · REGIONAL OPERATIONS</span><h2>Geographic Network Topology</h2><p>Select a region to inspect demo BTS, cell, and service health.</p></div>
+            <span className="live-chip"><Globe2 size={13} /> DEMO MAP</span>
+          </div>
+          <div className="geographic-layout">
+            <div className="myanmar-map-wrap">
+              <svg className="myanmar-map-shape" viewBox="0 0 360 500" role="img" aria-label="Stylized Myanmar map with clickable network regions">
+                <defs><linearGradient id="myanmarFill" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#153b52" /><stop offset="1" stopColor="#111b35" /></linearGradient></defs>
+                <path d="M122 19 L197 34 L222 76 L205 112 L236 144 L214 180 L233 211 L209 243 L219 277 L194 306 L208 340 L180 376 L188 409 L160 437 L145 478 L124 462 L130 420 L111 386 L118 351 L96 326 L111 292 L91 263 L112 234 L91 202 L116 174 L98 144 L123 119 L104 88 L128 65 Z" fill="url(#myanmarFill)" stroke="#24e9ff" strokeOpacity=".48" strokeWidth="2" />
+                <path d="M122 19 L197 34 L222 76 L205 112 L236 144 L214 180 L233 211 L209 243 L219 277 L194 306 L208 340 L180 376 L188 409 L160 437 L145 478 L124 462 L130 420 L111 386 L118 351 L96 326 L111 292 L91 263 L112 234 L91 202 L116 174 L98 144 L123 119 L104 88 L128 65 Z" fill="none" stroke="#24e9ff" strokeOpacity=".13" strokeDasharray="4 7" strokeWidth="8" />
+                <path d="M160 59 C146 124 162 163 156 220 S171 321 148 385 L143 447 M113 258 C143 246 177 254 211 242" fill="none" stroke="#24e9ff" strokeOpacity=".19" strokeDasharray="3 6" />
+              </svg>
+              {geographicRegions.map((item) => (
+                <button key={item.name} className={`map-region-marker ${item.status.toLowerCase()} ${selectedRegion === item.name ? "selected" : ""}`} style={{ left: `${item.x}%`, top: `${item.y}%` }} onClick={() => {
+                  setSelectedRegion(item.name);
+                  setSelectedMapCell(item.cellIds[0].id);
+                }}>
+                  <i className={`node-indicator ${item.status.toLowerCase()}`} /><span>{item.name}</span>
+                </button>
+              ))}
+              <div className="map-title-mark">MYANMAR <small>NETWORK REGION MAP</small></div>
+            </div>
+            <aside className="region-detail-card">
+              <span className="eyebrow">SELECTED REGION</span>
+              <div className="region-detail-title"><MapPin size={16} /><strong>{region.name}</strong><span className={nodeStatusClass(region.status)}>{region.status}</span></div>
+              <div className="region-metric-grid">
+                <div><span>AVAILABILITY</span><strong>{region.availability}</strong></div>
+                <div><span>ACTIVE CELLS</span><strong>{region.cells}</strong></div>
+                <div><span>NODE RECORDS</span><strong>{regionNodes.length || Math.max(3, Math.round(region.cells / 2))}</strong></div>
+                <div><span>24H TRAFFIC</span><strong>{region.traffic}</strong></div>
+              </div>
+              <span className="eyebrow regional-nodes-label">BTS / CELL DRILL-DOWN</span>
+              <div className="regional-cell-list">
+                {region.cellIds.map((cell) => (
+                  <button key={cell.id} className={`cell-chip ${selectedMapCell === cell.id ? "selected" : ""}`} onClick={() => setSelectedMapCell(cell.id)}>
+                    <i className={`node-indicator ${cell.status.toLowerCase()}`} />{cell.id}
+                  </button>
+                ))}
+              </div>
+              <div className={`regional-cell-kpi ${selectedRegion === "Yangon" && selectedMapCell === "AHLONE-003" ? "critical" : ""}`}>
+                <span>SELECTED CELL KPI · {selectedMapCell}</span>
+                <strong>{selectedRegion === "Yangon" && selectedMapCell === "AHLONE-003" ? "91.4% availability" : `${region.availability} availability`}</strong>
+                <small>{region.traffic} regional traffic · {Math.max(1, Math.round(region.cells / region.cellIds.length))} cells per listed sector</small>
+              </div>
+              <span className="eyebrow regional-nodes-label">REGIONAL NODES</span>
+              <div className="regional-node-list">
+                {(regionNodes.length ? regionNodes.slice(0, 4) : demoNetworkNodes.slice(0, 3)).map((node) => (
+                  <div key={node.id}><i className={`node-indicator ${node.status.toLowerCase()}`} /><strong>{node.id}</strong><small>{node.type}</small></div>
+                ))}
+              </div>
+              <button className="primary-button region-drill-button" onClick={() => {
+                const node = regionNodes[0] ?? demoNetworkNodes[0];
+                selectTopologyNode(node);
+                setSection("Network Topology");
+              }}><Network size={14} /> Drill into region topology</button>
+            </aside>
+          </div>
+          <div className="topology-legend">
+            {(["ONLINE", "DEGRADED", "CRITICAL"] as NodeStatus[]).map((status) => <span key={status}><i className={`node-indicator ${status.toLowerCase()}`} />{status}</span>)}
+            <span className="topology-refresh-time">Regional health is illustrative demo data.</span>
+          </div>
+        </section>
+      </div>
+    );
+  };
+
+  const renderDependencyMap = () => {
+    const dependencies = dependencyTarget === "PGW-01"
+      ? [
+          { name: "Internet Data", status: "CRITICAL" as NodeStatus, detail: "External packet data service" },
+          { name: "Mobile Data", status: "CRITICAL" as NodeStatus, detail: "Mobile subscriber data sessions" },
+          { name: "Enterprise VPN", status: "DEGRADED" as NodeStatus, detail: "Business VPN connectivity" }
+        ]
+      : [
+          { name: "VoLTE", status: "CRITICAL" as NodeStatus, detail: "IMS-based voice service" },
+          { name: "Voice", status: "CRITICAL" as NodeStatus, detail: "Voice session establishment" },
+          { name: "SMS over IMS", status: "DEGRADED" as NodeStatus, detail: "IMS messaging service" }
+        ];
+    return (
+      <section className="panel dependency-panel">
+        <div className="panel-heading">
+          <div><span className="eyebrow">SERVICE IMPACT ANALYSIS</span><h2>Network Dependency Map</h2><p>Choose an impaired network node to see its downstream service impact.</p></div>
+          <span className="live-chip"><Network size={13} /> DEMO DEPENDENCIES</span>
+        </div>
+        <div className="dependency-root-select">
+          {(["PGW-01", "IMS-02"] as const).map((node) => (
+            <button key={node} className={`dependency-root-button ${dependencyTarget === node ? "selected" : ""}`} onClick={() => setDependencyTarget(node)}>
+              <i className="node-indicator critical" /><strong>{node}</strong><span>CRITICAL</span>
+            </button>
+          ))}
+        </div>
+        <div className="dependency-tree">
+          <div className="dependency-source">
+            <AlertTriangle size={18} /><span><strong>{dependencyTarget}</strong><small>SIMULATED NODE FAILURE</small></span>
+          </div>
+          <div className="dependency-connector"><i /></div>
+          <div className="dependency-impact-list">
+            {dependencies.map((dependency) => (
+              <article className={`dependency-impact ${dependency.status.toLowerCase()}`} key={dependency.name}>
+                <span className={`node-indicator ${dependency.status.toLowerCase()}`} />
+                <div><strong>{dependency.name}</strong><small>{dependency.detail}</small></div>
+                <span className={nodeStatusClass(dependency.status)}>{dependency.status}</span>
+              </article>
+            ))}
+          </div>
+        </div>
+        <p className="demo-data-note">Dependency paths and impact severity are illustrative. Confirm service mappings with the production NMS/service inventory.</p>
+      </section>
+    );
+  };
+
+  const renderHistoricalTimeline = () => {
+    const actualItems = hourlyReport?.items.filter((item) =>
+      item.metric_name.toLowerCase().includes(timelineMetric.toLowerCase())
+      && (reportNetwork === "all" || item.network_type === reportNetwork)
+    ) ?? [];
+    const timelineData = actualItems.length
+      ? actualItems.slice(-24).map((item) => ({ hour: item.hour, value: item.average, unit: item.unit }))
+      : Array.from({ length: 13 }, (_, index) => {
+          const base = timelineMetric === "Latency" ? 22 : timelineMetric === "Traffic" ? 1.25 : timelineMetric === "DCR" ? 1.4 : timelineMetric === "CSSR" ? 98.4 : timelineMetric === "VoLTE" ? 97.6 : 98.7;
+          const amplitude = timelineMetric === "Latency" ? 8 : timelineMetric === "Traffic" ? 0.35 : timelineMetric === "DCR" ? 0.35 : 0.8;
+          return {
+            hour: new Date(Date.now() - (12 - index) * 2 * 60 * 60 * 1000).toISOString(),
+            value: Number((base + Math.sin(index * 0.8) * amplitude + Math.cos(index * 0.35) * amplitude * 0.3).toFixed(2)),
+            unit: timelineMetric === "Traffic" ? "Gbps" : timelineMetric === "Latency" ? "ms" : "%"
+          };
+        });
+    return (
+      <section className="panel history-panel">
+        <div className="panel-heading">
+          <div><span className="eyebrow">ANALYTICS · 24 HOUR WINDOW</span><h2>Historical KPI Timeline</h2><p>Hourly report data when available; otherwise an explicitly labeled demo trend.</p></div>
+          <span className={`live-chip ${actualItems.length ? "" : "demo-chip"}`}>{actualItems.length ? "API REPORT DATA" : "DEMO SERIES"}</span>
+        </div>
+        <div className="history-toolbar">
+          <label>Metric<select className="dark-select" value={timelineMetric} onChange={(event) => setTimelineMetric(event.target.value as HistoryMetric)}>{historyMetrics.map((metric) => <option key={metric}>{metric}</option>)}</select></label>
+          <label>Network<select className="dark-select" value={reportNetwork} onChange={(event) => setReportNetwork(event.target.value as typeof reportNetwork)}><option value="all">All networks</option><option value="CS">CS</option><option value="PS">PS</option><option value="VoLTE">VoLTE</option></select></label>
+          <button className="secondary-button" onClick={() => token ? void loadHourlyReport(token) : setNotice("Connect an API token to load actual hourly KPI history.")} disabled={reportLoading}><RefreshCw size={13} className={reportLoading ? "spin" : ""} /> Load hourly data</button>
+        </div>
+        {reportLoading && <div className="loading-strip"><LoaderCircle size={14} className="spin" /> Loading historical report data…</div>}
+        <div className="chart-area history-chart">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={timelineData} margin={{ top: 12, right: 10, left: -16, bottom: 4 }}>
+              <defs><linearGradient id="historyFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#24e9ff" stopOpacity={0.3} /><stop offset="95%" stopColor="#24e9ff" stopOpacity={0} /></linearGradient></defs>
+              <CartesianGrid stroke="#1c2940" strokeDasharray="3 5" vertical={false} />
+              <XAxis dataKey="hour" tickFormatter={(value: string) => new Date(value).toLocaleTimeString([], { hour: "2-digit" })} tick={{ fill: "#73849e", fontSize: 9 }} />
+              <YAxis tick={{ fill: "#73849e", fontSize: 10 }} axisLine={false} tickLine={false} />
+              <Tooltip labelFormatter={(value) => formatDate(value)} formatter={(value) => [`${number(value)} ${timelineData[0]?.unit ?? ""}`, timelineMetric]} contentStyle={{ background: "#0b1221", border: "1px solid #264056", borderRadius: 10 }} />
+              <Area type="monotone" dataKey="value" stroke="#24e9ff" strokeWidth={2.2} fill="url(#historyFill)" activeDot={{ r: 4 }} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="history-footer"><span><i className="legend-dot cyan-dot" />{timelineMetric} · {timelineData.length} points</span><span>{actualItems.length ? `Report updated ${reportUpdated?.toLocaleTimeString() ?? "recently"}` : "Sample values — not production telemetry"}</span></div>
+      </section>
+    );
+  };
+
+  const renderPredictions = () => (
+    <section className="panel prediction-panel">
+      <div className="panel-heading">
+        <div><span className="eyebrow">APEXIVEAI INTELLIGENCE</span><h2>AI / Predictive Operations</h2><p>Illustrative early-warning signal and recommended next action.</p></div>
+        <span className="live-chip demo-chip"><Zap size={13} /> DEMO PREDICTION</span>
+      </div>
+      <div className="prediction-card">
+        <div className="prediction-alert-icon"><AlertTriangle size={20} /></div>
+        <div className="prediction-summary"><span className="eyebrow">PREDICTED INCIDENT</span><h3>AHLONE-003 availability degradation</h3><p>Potential cell service impact detected in Yangon region.</p></div>
+        <div className="prediction-probability"><strong>87%</strong><span>probability</span></div>
+      </div>
+      <div className="prediction-detail-grid">
+        <div><span>EXPECTED DEGRADATION</span><strong>~ 18 minutes</strong></div>
+        <div><span>REGION / CELL</span><strong>Yangon · AHLONE-003</strong></div>
+      </div>
+      <div className="prediction-reasons">
+        <span className="eyebrow">SIGNAL CONTRIBUTORS</span>
+        <div><AlertTriangle size={13} /> Rising packet loss</div>
+        <div><Activity size={13} /> Increasing latency</div>
+        <div><Network size={13} /> Traffic imbalance</div>
+      </div>
+      <div className="prediction-action-row">
+        <p>Recommendation: run the diagnostic workflow and review affected cell KPIs.</p>
+        <button className="primary-button" onClick={() => { setAutomationWorkflowOpen(true); setSection("Workflow Monitor"); }}><Zap size={14} /> Review diagnostic workflow</button>
+      </div>
+      <p className="demo-data-note">Prediction probability, causes, and time estimate are demo content, not an ML model output or live forecast.</p>
+    </section>
+  );
+
+  const renderServiceHealth = () => (
+    <div className="stack">
+      <section className="panel">
+        <div className="panel-heading"><div><span className="eyebrow">SERVICE ASSURANCE</span><h2>Service Health</h2><p>Demo service availability and impact overview.</p></div><span className="live-chip demo-chip">DEMO INVENTORY</span></div>
+        <div className="service-health-list">
+          {[["Internet Data", "CRITICAL", "PGW-01"], ["Mobile Data", "CRITICAL", "PGW-01"], ["Enterprise VPN", "DEGRADED", "PGW-01"], ["VoLTE", "CRITICAL", "IMS-02"], ["SMS over IMS", "DEGRADED", "IMS-02"]].map(([name, status, dependency]) => (
+            <button key={name} className="service-health-row" onClick={() => { setDependencyTarget(dependency as "PGW-01" | "IMS-02"); setSection("Network Dependency Map"); }}>
+              <i className={`node-indicator ${status.toLowerCase()}`} /><strong>{name}</strong><span>{dependency}</span><span className={nodeStatusClass(status as NodeStatus)}>{status}</span><ChevronRight size={14} />
+            </button>
+          ))}
+        </div>
+      </section>
+      {renderGeographicMap()}
+    </div>
+  );
+
+  const renderWorkflowMonitor = () => (
+    <div className="stack">
+      <section className="panel">
+        <div className="panel-heading"><div><span className="eyebrow">RPA CONTROL</span><h2>Workflow Monitor</h2><p>Workflow status from the current demonstration.</p></div><span className="live-chip demo-chip">SIMULATED</span></div>
+        <div className="workflow-monitor-card"><div><span className="eyebrow">ACTIVE DIAGNOSTIC</span><h3>AHLONE-003 · Critical Availability</h3><p>Incident MPT-20261017-0842 · Started 16:02</p></div><button className="small-action" onClick={() => setAutomationWorkflowOpen((open) => !open)}>{automationWorkflowOpen ? "Hide trace" : "Show trace"} <ChevronRight size={13} /></button></div>
+        {automationWorkflowOpen && <div className="workflow-monitor-steps">{["Detect abnormal KPI", "Collect related KPIs", "Compare threshold", "Identify affected cells", "Generate incident", "Notify operation team", "Generate report"].map((step, index) => <div key={step}><span>{String(index + 1).padStart(2, "0")}</span><strong>{step}</strong><CheckCircle2 size={14} /></div>)}</div>}
+      </section>
+      {renderJobs()}
+    </div>
+  );
+
+  const renderIntegrationInfo = (settings = false) => (
+    <section className="panel">
+      <div className="panel-heading"><div><span className="eyebrow">{settings ? "ADMINISTRATION" : "CONNECTIVITY"}</span><h2>{settings ? "System Settings" : "API / Integration"}</h2><p>{settings ? "Runtime configuration overview." : "Integration status and production data requirements."}</p></div><span className="live-chip demo-chip">CONFIGURATION VIEW</span></div>
+      <div className="integration-state"><span className={`pulse-dot ${health === "offline" ? "pulse-off" : ""}`} /><div><strong>{health === "online" ? "Application API reachable" : "Application API unavailable"}</strong><small>Topology/NMS collector integration is not configured in this UI.</small></div></div>
+      <div className="integration-requirements">
+        <div><span>01</span><strong>Vendor / NMS endpoint</strong><small>Provide authenticated node, cell, alarm, and service-inventory APIs.</small></div>
+        <div><span>02</span><strong>Telemetry ingestion</strong><small>Send normalized KPI and timestamp data to the backend collector.</small></div>
+        <div><span>03</span><strong>Secure operations</strong><small>Configure credentials, network access, retention, and audit controls server-side.</small></div>
+      </div>
+      <p className="demo-data-note">No credentials or external integrations are changed by this configuration page.</p>
+    </section>
+  );
+
   const content = {
+    "Network Topology": renderTopology,
     Overview: renderOverview,
+    "Geographic Map": renderGeographicMap,
     "Network KPIs": renderKpis,
     "Hourly Reports": renderHourlyReports,
+    "Historical KPI Timeline": renderHistoricalTimeline,
     "Alerts Center": renderAlerts,
+    "Service Health": renderServiceHealth,
+    "Network Dependency Map": renderDependencyMap,
     "Automation Jobs": renderJobs,
+    "Workflow Monitor": renderWorkflowMonitor,
+    "RPA Execution History": renderJobs,
     Thresholds: renderThresholds,
+    "Performance Analytics": renderHistoricalTimeline,
+    "Traffic Analytics": renderHistoricalTimeline,
+    "AI Predictions": renderPredictions,
+    "API / Integration": () => renderIntegrationInfo(false),
+    "System Settings": () => renderIntegrationInfo(true),
     License: renderLicense,
     "Audit Logs": renderLogs
   }[section]();
@@ -892,19 +1710,20 @@ export default function App() {
         <div className="workspace-label">WORKSPACE <span>01</span></div>
         <div className="tenant-card"><div className="tenant-avatar"><Network size={18} /></div><div><strong>Telecom RPA</strong><small>Control Center</small></div><ChevronRight size={15} /></div>
         <nav className="sidebar-nav">
-          <span className="nav-heading">MONITORING</span>
-          {navItems.slice(0, 4).map(({ label, icon: Icon }) => (
-            <button key={label} className={`nav-item ${section === label ? "active" : ""}`} onClick={() => { setSection(label); setMobileNav(false); }}>
-              <Icon size={17} /><span>{label}</span>{label === "Alerts Center" && activeAlerts.length > 0 && <i className="nav-count">{activeAlerts.length}</i>}
-            </button>
-          ))}
-          <span className="nav-heading">AUTOMATION</span>
-          {navItems.slice(4, 6).map(({ label, icon: Icon }) => (
-            <button key={label} className={`nav-item ${section === label ? "active" : ""}`} onClick={() => { setSection(label); setMobileNav(false); }}><Icon size={17} /><span>{label}</span></button>
-          ))}
-          <span className="nav-heading">ADMINISTRATION</span>
-          {navItems.slice(6).map(({ label, icon: Icon }) => (
-            <button key={label} className={`nav-item ${section === label ? "active" : ""}`} onClick={() => { setSection(label); setMobileNav(false); }}><Icon size={17} /><span>{label}</span></button>
+          {navGroups.map(({ heading, sections }) => (
+            <div className="nav-group" key={heading}>
+              <span className="nav-heading">{heading}</span>
+              {sections.map((label) => {
+                const item = navItems.find((navItem) => navItem.label === label);
+                if (!item) return null;
+                const Icon = item.icon;
+                return (
+                  <button key={label} className={`nav-item ${section === label ? "active" : ""}`} onClick={() => { setSection(label); setMobileNav(false); }}>
+                    <Icon size={17} /><span>{label}</span>{label === "Alerts Center" && activeAlerts.length > 0 && <i className="nav-count">{activeAlerts.length}</i>}
+                  </button>
+                );
+              })}
+            </div>
           ))}
         </nav>
         <div className="sidebar-bottom">
